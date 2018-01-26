@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-let Timer = require('nanotimer');
-let AWS = require('aws-sdk');
-let bluebird = require('bluebird');
-let inquirer = require('inquirer');
-let vorpal = require('vorpal')();
-let ora = require('ora');
+const Timer = require('nanotimer');
+const AWS = require('aws-sdk');
+const bluebird = require('bluebird');
+const inquirer = require('inquirer');
+const vorpal = require('vorpal')();
+const moment = require('moment');
+const ora = require('ora');
 const spinner = ora('Loading unicorns');
 
 inquirer.registerPrompt('datetime', require('inquirer-datepicker-prompt'));
@@ -18,7 +19,7 @@ const STATE = '@pipelineState';
 
 
 let credentials = new AWS.SharedIniFileCredentials({
-	profile: 'default'
+	profile: 'evidon'
 });
 AWS.config.credentials = credentials;
 AWS.config.region = 'us-east-1';
@@ -27,13 +28,14 @@ AWS.config.setPromisesDependency(bluebird);
 let dp = new AWS.DataPipeline();
 let fil = 'v3';
 
-
 function isHealthy(fields) {
-	return fields.find(item => item.key === STATUS).stringValue === HEALTHY;
+	let status = fields.find(item => item.key === STATUS);
+	return status ? status.stringValue === HEALTHY : false;
 }
 
 function isRunning(fields) {
-	return fields.find(item => item.key === STATE).stringValue === RUNNING;
+	let state = fields.find(item => item.key === STATE);
+	return state ? state.stringValue === RUNNING : false;
 }
 
 function getPipelineList(filter) {
@@ -42,7 +44,7 @@ function getPipelineList(filter) {
 		.filter(item => item.name && item.name.indexOf('adhoc') >= 0 && item.name.indexOf(filter) >= 0);
 }
 
-function getChoices(filter) {
+function getChoices() {
 	return getPipelineList(fil)
 		.map(item => {
 			return {
@@ -71,6 +73,74 @@ function getStatus(descriptionList) {
 	})
 }
 
+function clear() {
+	process.stdout.write('\x1Bc');
+}
+
+function pretty(str) {
+	return JSON.stringify(str, null, '  ');
+}
+
+function validate(id) {
+	let params = {
+		pipelineId: id
+	};
+
+	dp.getPipelineDefinition(params, function (err, data) {
+		if (err) vorpal.log(err, err.stack); // an error occurred
+		else {
+			data.pipelineId = id;
+			dp.validatePipelineDefinition(data, (err, dt) => {
+				if (err) vorpal.log(err, err.stack); // an error occurred
+				else {
+					vorpal.log(pretty(dt));
+					vorpal.ui.redraw.done();
+				}
+			});
+		}
+	});
+}
+
+function setDate(params, date) {
+	let dateIdx = params.parameterValues.findIndex((val) => {
+		return val.id === 'myStartDate'
+	});
+
+	if (dateIdx >= 0) {
+		params.parameterValues[dateIdx].stringValue = date;
+		return params;
+	}
+
+	return null;
+}
+
+function activate(id, startDate) {
+	let params = {
+		pipelineId: id
+	};
+
+	dp.getPipelineDefinition(params, function (err, data) {
+		if (err) vorpal.log(err, err.stack); // an error occurred
+		else {
+			let activateData = {
+				pipelineId: id,
+				parameterValues: data.parameterValues,
+				startTimestamp: new Date()
+			};
+
+			activateData = setDate(activateData, startDate);
+
+			dp.activatePipeline(activateData, (err, dt) => {
+				if (err) {
+					vorpal.log(err, err.stack);
+				} else {
+					vorpal.log('Successful Activation');
+					vorpal.log(pretty(dt));
+				}
+			});
+		}
+	});
+}
 
 
 //runIt();
@@ -78,38 +148,13 @@ function runIt(pipelineIds) {
 	getPipelineDetails(pipelineIds)
 		.then(data => getStatus(data))
 		.then(data => {
-			vorpal.log(JSON.stringify(data, null, '  '));
-			vorpal.ui.redraw();
+			clear();
+			vorpal.log(pretty(data));
 			vorpal.ui.redraw.done();
-			vorpal.ui.redraw.clear();
 		})
 		.catch(err => {
 			console.error(err, err.stack);
 		});
-
-	// dp.listPipelines({}).promise()
-	// 	.then(data => data.pipelineIdList)
-	// 	.filter(item => item.name && item.name.indexOf('adhoc') >= 0 && item.name.indexOf(fil) >= 0)
-	// 	.map(item => item.id)
-	// 	.then(data => dp.describePipelines({
-	// 		pipelineIds: data
-	// 	}).promise())
-	// 	.then(data => data.pipelineDescriptionList)
-	// 	.map((item, idx) => {
-	// 		return {
-	// 			index: idx,
-	// 			pipelineId: item.pipelineId,
-	// 			name: item.name,
-	// 			isHealthy: isHealthy(item.fields),
-	// 			isRunning: isRunning(item.fields)
-	// 		};
-	// 	})
-	// 	.then(data => {
-	// 		console.log(JSON.stringify(data, '', '  '));
-	// 	})
-	// 	.catch(err => {
-	// 		console.error(err, err.stack);
-	// 	});
 }
 
 let questions = [{
@@ -137,13 +182,14 @@ let questions = [{
 
 vorpal.command('start', 'Starts backfill process')
 	.action(function (args, cb) {
-
 		inquirer.prompt(questions)
 			.then(answers => {
 				let timer = new Timer();
+				validate(answers.pipelineId, moment(answers.beginDate).format('YYYY-MM-DD'));
+				spinner.start();
 				timer.setInterval(runIt, [
 					[answers.pipelineId]
-				], '5s', (time) => {
+				], '60s', (time) => {
 					console.log(time);
 				});
 
@@ -153,17 +199,17 @@ vorpal.command('start', 'Starts backfill process')
 	});
 
 vorpal
-	.command('cancel', 'Cancels backfill')
+	.command('stop', 'Stops pipeline')
 	.action(function (args, callback) {
-		this.log('Backfill cancelled!');
-		vorpal.ui.cancel();
+		this.log('Data Pipeline stopped!');
+		callback();
 	});
 
-vorpal.delimiter('backfill$');
+vorpal.delimiter('dprun$');
 
-vorpal.exec('start').then(data => {
+vorpal.exec('start').then(() => {
+	clear();
 	vorpal.show();
-	vorpal.log('Made it');
 });
 
 // inquirer.prompt(questions).then(answers => {
