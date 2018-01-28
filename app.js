@@ -16,8 +16,6 @@ const RUNNING = 'SCHEDULED';
 const STATUS = '@healthStatus';
 const STATE = '@pipelineState';
 
-
-
 let credentials = new AWS.SharedIniFileCredentials({
 	profile: 'evidon'
 });
@@ -26,7 +24,7 @@ AWS.config.region = 'us-east-1';
 AWS.config.setPromisesDependency(bluebird);
 
 let dp = new AWS.DataPipeline();
-let fil = 'v3';
+let fil = 'v';
 
 function isHealthy(fields) {
 	let status = fields.find(item => item.key === STATUS);
@@ -56,8 +54,8 @@ function getChoices() {
 
 function getPipelineDetails(pipelineIds) {
 	return dp.describePipelines({
-			pipelineIds: pipelineIds
-		}).promise()
+		pipelineIds: pipelineIds
+	}).promise()
 		.then(data => data.pipelineDescriptionList);
 }
 
@@ -87,11 +85,11 @@ function validate(id) {
 	};
 
 	dp.getPipelineDefinition(params, function (err, data) {
-		if (err) vorpal.log(err, err.stack); // an error occurred
+		if (err) { vorpal.log(err, err.stack); } // an error occurred
 		else {
 			data.pipelineId = id;
 			dp.validatePipelineDefinition(data, (err, dt) => {
-				if (err) vorpal.log(err, err.stack); // an error occurred
+				if (err) { vorpal.log(err, err.stack); } // an error occurred
 				else {
 					vorpal.log(pretty(dt));
 					vorpal.ui.redraw.done();
@@ -120,7 +118,7 @@ function activate(id, startDate) {
 	};
 
 	dp.getPipelineDefinition(params, function (err, data) {
-		if (err) vorpal.log(err, err.stack); // an error occurred
+		if (err) { vorpal.log(err, err.stack); } // an error occurred
 		else {
 			let activateData = {
 				pipelineId: id,
@@ -142,8 +140,6 @@ function activate(id, startDate) {
 	});
 }
 
-
-//runIt();
 function runIt(pipelineIds) {
 	getPipelineDetails(pipelineIds)
 		.then(data => getStatus(data))
@@ -158,26 +154,26 @@ function runIt(pipelineIds) {
 }
 
 let questions = [{
-		type: 'list',
-		name: 'pipelineId',
-		message: 'Which pipeline will you be backfilling?',
-		choices: getChoices
-	},
-	{
-		type: 'datetime',
-		name: 'beginDate',
-		message: 'Begin Date:',
-		format: ['yyyy', '-', 'mm', '-', 'dd']
-	},
-	{
-		type: 'datetime',
-		name: 'endDate',
-		message: 'End Date:',
-		format: ['yyyy', '-', 'mm', '-', 'dd'],
-		date: {
-			min: '2017-01-01'
-		}
+	type: 'list',
+	name: 'pipelineId',
+	message: 'Which pipeline will you be backfilling?',
+	choices: getChoices
+},
+{
+	type: 'datetime',
+	name: 'beginDate',
+	message: 'Begin Date:',
+	format: ['yyyy', '-', 'mm', '-', 'dd']
+},
+{
+	type: 'datetime',
+	name: 'endDate',
+	message: 'End Date:',
+	format: ['yyyy', '-', 'mm', '-', 'dd'],
+	date: {
+		min: '2017-01-01'
 	}
+}
 ];
 
 vorpal.command('start', 'Starts backfill process')
@@ -185,8 +181,9 @@ vorpal.command('start', 'Starts backfill process')
 		inquirer.prompt(questions)
 			.then(answers => {
 				let timer = new Timer();
-				validate(answers.pipelineId, moment(answers.beginDate).format('YYYY-MM-DD'));
-				spinner.start();
+
+				activate(answers.pipelineId, moment(answers.beginDate).format('YYYY-MM-DD'));
+
 				timer.setInterval(runIt, [
 					[answers.pipelineId]
 				], '60s', (time) => {
@@ -211,24 +208,3 @@ vorpal.exec('start').then(() => {
 	clear();
 	vorpal.show();
 });
-
-// inquirer.prompt(questions).then(answers => {
-// 	let timer = new Timer();
-// 	timer.setInterval(runIt, [
-// 		[answers.pipelineId]
-// 	], '5s', (time) => {
-// 		console.log(time);
-// 	});
-
-// 	vorpal
-// 		.command('cancel', 'Cancels backfill')
-// 		.action(function (args, callback) {
-// 			this.log('Backfill cancelled!');
-// 			vorpal.ui.cancel();
-// 		});
-
-// 	vorpal
-// 		.delimiter('backfill$')
-// 		.show();
-
-// });
