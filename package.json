@@ -11,7 +11,7 @@
   "dependencies": {
     "aws-sdk": "2.193.0",
     "bluebird": "3.5.1",
-    "inquirer": "5.0.1",
+    "inquirer": "5.1.0",
     "inquirer-datepicker-prompt": "0.4.2",
     "moment": "2.20.1",
     "nanotimer": "0.3.15",
