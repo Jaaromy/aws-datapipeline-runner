@@ -15,7 +15,7 @@
     "inquirer-datepicker-prompt": "0.4.2",
     "moment": "2.22.1",
     "nanotimer": "0.3.15",
-    "ora": "2.0.0",
+    "ora": "3.3.0",
     "vorpal": "1.12.0"
   }
 }
