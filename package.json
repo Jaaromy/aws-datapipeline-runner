@@ -10,7 +10,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "aws-sdk": "2.225.1",
-    "bluebird": "3.5.1",
+    "bluebird": "3.7.0",
     "inquirer": "5.2.0",
     "inquirer-datepicker-prompt": "0.4.2",
     "moment": "2.22.1",
