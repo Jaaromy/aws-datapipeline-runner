@@ -9,7 +9,7 @@
   "author": "Jaaromy Zierse",
   "license": "UNLICENSED",
   "dependencies": {
-    "aws-sdk": "2.225.1",
+    "aws-sdk": "2.733.0",
     "bluebird": "3.5.1",
     "inquirer": "5.2.0",
     "inquirer-datepicker-prompt": "0.4.2",
